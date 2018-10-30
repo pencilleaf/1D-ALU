@@ -1,0 +1,17 @@
+module boolean (
+    input a[16],
+    input b[16],
+    input alufn[6],
+    output out[16]
+  ) {
+
+  always {
+    out = 0;
+    case(alufn){
+    6h18: out = a & b; //and
+    6h1E: out = a | b; //or
+    6h16: out = a ^ b; //xor
+    6h1A: out = a; //"A"
+  }
+  }
+}

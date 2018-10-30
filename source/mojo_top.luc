@@ -1,0 +1,246 @@
+module mojo_top (
+    input clk,              // 50MHz clock
+    input rst_n,            // reset button (active low)
+    output led [8],         // 8 user controllable LEDs
+    input cclk,             // configuration clock, AVR ready when high
+    output spi_miso,        // AVR SPI MISO
+    input spi_ss,           // AVR SPI Slave Select
+    input spi_mosi,         // AVR SPI MOSI
+    input spi_sck,          // AVR SPI Clock
+    output spi_channel [4], // AVR general purpose pins (used by default to select ADC channel)
+    input avr_tx,           // AVR TX (FPGA RX)
+    output avr_rx,          // AVR RX (FPGA TX)
+    input avr_rx_busy,      // AVR RX buffer full
+    output io_led [3][8],   // LEDs on IO Shield
+    output io_seg [8],      // 7-segment LEDs on IO Shield
+    output io_sel [4],      // Digit select on IO Shield
+    input io_button [5],    // 5 buttons on IO Shield
+    input io_dip [3][8]     // DIP switches on IO Shield
+  ) {
+  
+  sig rst;                  // reset signal
+  alu alu;
+  alu_error alu_error;
+  sig final[16];            // signal to store alu output
+  
+  .clk(clk) {
+    // The reset conditioner is used to synchronize the reset signal to the FPGA
+    // clock. This ensures the entire FPGA comes out of reset at the same time.
+    reset_conditioner reset_cond;
+    
+    // State machine for testing
+    fsm state = {IDLE, ENTERA, ENTERB, COMPUTE, AUTOADD, AUTOCMP, 
+                 AUTOBOOL, AUTOSHIFT, AUTOMUL};
+    .rst(rst) {
+      dff inputa[16];
+      dff inputb[16];
+      multi_seven_seg seg;
+      adder_auto adder_auto;
+      boolean_auto boolean_auto;
+      shifter_auto shifter_auto;
+      multiplier_auto multiplier_auto;
+      compare_auto compare_auto;
+      
+    }
+  }
+  
+  always {
+    reset_cond.in = ~rst_n; // input raw inverted reset signal
+    rst = reset_cond.out;   // conditioned reset
+    
+    led = 8h00;             // turn LEDs off
+    spi_miso = bz;          // not using SPI
+    spi_channel = bzzzz;    // not using flags
+    avr_rx = bz;            // not using serial port
+    
+    io_led = 3x{{8h00}};    // turn LEDs off
+    io_seg = 8hff;          // turn segments off
+    io_sel = 4hf;           // select no digits
+    
+    // The segments will display "EYYY" by default
+    seg.values = {4hb, 4hd, 4hd, 4hd};
+    
+    io_seg = ~seg.seg; // Connect segments to the driver
+    io_sel = ~seg.sel; // Connect digit select to the driver
+    
+    
+    // Set values for alu and alu_error
+    alu.a = 16h0;
+    alu.b = 16h0;
+    alu.alufn = io_dip[2][7:2]; // Use the leftmost switches for alufn
+
+    alu_error.in = alu.out;
+    
+    // Use output from alu if switch is off
+    final = alu.out;
+    
+    // Use output from alu_error if switch is on
+    if(io_dip[2][0]){
+      final = alu_error.out;}
+    
+    // Set trigger to 0 for auto testing to go to IDLE
+    boolean_auto.trigger = 0;
+    adder_auto.trigger = 0;
+    shifter_auto.trigger = 0;
+    multiplier_auto.trigger = 0;
+    compare_auto.trigger = 0;
+    
+    // Set values for output of autotest modules
+    boolean_auto.out = 0;
+    adder_auto.out = 0;
+    shifter_auto.out = 0;
+    multiplier_auto.out = 0;
+    compare_auto.out = 0;
+    
+    case(state.q){
+    
+      state.IDLE: 
+        if(io_dip[2][1]){
+          state.d = state.ENTERA;} // Flip second switch from the right (1st group of switches) to Manual Test
+        if(io_button[0]){
+          state.d = state.AUTOADD;} // Press Up button to test Addition
+        if(io_button[1]){
+          state.d = state.AUTOMUL;}  // Press Centre button to test Multiply and Division
+        if(io_button[2]){
+          state.d = state.AUTOCMP;} // Press Down button to test Compare
+        if(io_button[3]){
+          state.d = state.AUTOBOOL;} // Press Left button to test Boolean
+        if(io_button[4]){
+          state.d = state.AUTOSHIFT;} // Press Right button to test Shifter
+      
+        
+      // Manual Testing  
+        
+      state.ENTERA:
+        seg.values = {4ha, 4ha, 4ha, 4he}; // Display 'A'
+        io_led[1] = io_dip[1];
+        io_led[0] = io_dip[0];
+        
+        // Enter A using 2 groups of io_dip, store in dff
+        inputa.d = c{io_dip[1], io_dip[0]};
+        
+        // Flip switch again to go to ENTERB
+        if(!io_dip[2][1]){
+          state.d = state.ENTERB;} 
+          
+        else if(rst){
+          state.d = state.IDLE;}
+        
+      state.ENTERB:
+        seg.values = {4ha, 4ha, 4ha, 4h8}; // Display 'B'
+        io_led[1] = io_dip[1];
+        io_led[0] = io_dip[0];
+        
+        // Enter B using 2 groups of io_dip, store in dff
+        inputb.d = c{io_dip[1], io_dip[0]};
+        
+        // Flip switch again to go to COMPUTE
+        if(io_dip[2][1]){
+          state.d = state.COMPUTE;}
+          
+        else if(rst){
+          state.d = state.IDLE;}
+          
+      state.COMPUTE:
+        seg.values = {4ha, 4he, 4hf, 4h5};
+        alu.a = inputa.q;
+        alu.b = inputb.q;
+        io_led[1] = final[15:8];
+        io_led[0] = final[7:0]; // Use 2 groups of LEDs to display output
+
+        if(rst){
+          state.d = state.IDLE;}
+          
+        
+      // Automatic Testing 
+      
+      state.AUTOADD:
+        adder_auto.trigger = 1;
+        
+        // Connecting the outputs of the test adder
+        alu.a = adder_auto.a;
+        alu.b = adder_auto.b;
+        alu.alufn = adder_auto.alufn;
+        
+        // Connecting the output from error as input to the adder_auto
+        adder_auto.out = final;
+        
+        io_seg = adder_auto.io_seg;
+        io_sel = adder_auto.io_sel;
+        if(rst){
+          adder_auto.trigger = 0;
+          state.d = state.IDLE;}
+          
+      state.AUTOBOOL:
+        boolean_auto.trigger = 1;
+        
+        // Connecting the outputs of the test boolean
+        alu.a = boolean_auto.a;
+        alu.b = boolean_auto.b;
+        alu.alufn = boolean_auto.alufn;
+        
+        // Connecting the output from error as input to the boolean_auto
+        boolean_auto.out = final;
+        
+        io_seg = boolean_auto.io_seg;
+        io_sel = boolean_auto.io_sel;
+        if(rst){
+          boolean_auto.trigger = 0;
+          state.d = state.IDLE;}
+          
+      state.AUTOSHIFT:
+        shifter_auto.trigger = 1;
+        
+        // Connecting the outputs of the test shifter
+        alu.a = shifter_auto.a;
+        alu.b = shifter_auto.b;
+        alu.alufn = shifter_auto.alufn;
+        
+        // Connecting the output from error as input to the shifter_auto
+        shifter_auto.out = final;
+        
+        io_seg = shifter_auto.io_seg;
+        io_sel = shifter_auto.io_sel;
+        if(rst){
+          boolean_auto.trigger = 0;
+          state.d = state.IDLE;}
+
+      state.AUTOCMP:
+        compare_auto.trigger = 1;
+        
+        // Connecting the outputs of the test compare
+        alu.a = compare_auto.a;
+        alu.b = compare_auto.b;
+        alu.alufn = compare_auto.alufn;
+        
+        // Connecting the output from error as input to the compare_auto
+        compare_auto.out = final;
+        
+        io_seg = compare_auto.io_seg;
+        io_sel = compare_auto.io_sel;
+        if(rst){
+          compare_auto.trigger = 0;
+          state.d = state.IDLE;}
+          
+      state.AUTOMUL:
+        multiplier_auto.trigger = 1;
+        
+        // Connecting the outputs of the test multiplier
+        alu.a = multiplier_auto.a;
+        alu.b = multiplier_auto.b;
+        alu.alufn = multiplier_auto.alufn;
+        
+        // Connecting the output from error as input to the multiplier_auto
+        multiplier_auto.out = final;
+        
+        io_seg = multiplier_auto.io_seg;
+        io_sel = multiplier_auto.io_sel;
+        if(rst){
+          multiplier_auto.trigger = 0;
+          state.d = state.IDLE;}
+          
+    }
+    
+    
+  }
+}

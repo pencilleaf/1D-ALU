@@ -1,0 +1,11 @@
+module alu_error (
+    input in[16],
+    output out[16]
+  ) {
+  
+  always {
+    // Change LSB of input
+    out[15:1] = in[15:1];
+    out[0] = ~in[0];
+  }
+}

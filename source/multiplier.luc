@@ -1,0 +1,15 @@
+module multiplier (
+    input a[16],
+    input b[16],
+    input alufn[6],
+    output out[16]
+  ) {
+
+  always {
+    out = 0;
+    case(alufn){
+    6h02: out = $signed(a) * $signed(b); //multiply
+    6h03 : out = $signed(a) / $signed(b) ; //divide
+  }
+  }
+}

@@ -1,0 +1,103 @@
+module boolean_auto (
+    input clk,  // clock
+    input rst,  // reset
+    input trigger, // this will start the relevant states of the test
+    output io_sel [4],  // Digit select on IO Shield
+    output io_seg [8],  // 7-segment LEDs on IO Shield
+    output a[16],  // The tester will output 16 bits of a  
+    output b[16],  // The tester will output 16 bits of b
+    output alufn[6],  // The tester will output 6 bits of alufn
+    input out[16]  // the tester will take in the ouput of the alu_error and check its validity 
+  ) {
+  
+  .clk(clk){
+    .rst(rst){
+    fsm state = {IDLE, TEST1, TEST2, TEST3, TEST4, PASS, FAIL};
+    multi_seven_seg seg;
+    stateCounter sc;
+    }
+  }
+  always {
+    a = 0;
+    b = 0;
+    alufn = 0;
+    
+    // The segments will display "EYYY" by default
+    seg.values = {4hb, 4hd, 4hd, 4hd};
+    
+    io_seg = ~seg.seg; // Connect segments to the driver
+    io_sel = ~seg.sel; // Connect digit select to the driver
+    
+    if(trigger == 0){
+      state.d = state.IDLE;
+  }
+    case(state.q){
+      state.IDLE: 
+        if(trigger == 1){
+          state.d = state.TEST1;}
+         
+      state.TEST1: // test AND
+        a = 16b1110100111010111;
+        b = 16b0001110101101110;
+        alufn = 6h18;
+        seg.values = {4ha, 4ha, 4ha, 4h1};  
+        // Check if the outputs is expected
+        // If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b0000100101000110 && sc.inc_state == 1) {
+          state.d = state.TEST2;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;}
+        
+      state.TEST2: // test OR
+        a = 16b1110100111010111;
+        b = 16b0001110101101110;
+        alufn = 6h1e;
+        seg.values = {4ha, 4ha, 4ha, 4h2}; 
+        
+        if (out == 16b1111110111111111 && sc.inc_state == 1) {
+          state.d = state.TEST3;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;}
+          
+      state.TEST3: // test XOR
+        a = 16b1110100111010111;
+        b = 16b0001110101101110;
+        alufn = 6h16;
+        seg.values = {4ha, 4ha, 4ha, 4h3};  
+        
+        if (out == 16b1111010010111001 && sc.inc_state == 1) {
+          state.d = state.TEST4;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;}
+            
+      state.TEST4: //test A
+        a = 16b1110100111010111;
+        b = 16b0001110101101110;
+        alufn = 6h1a;
+        seg.values = {4ha, 4ha, 4ha, 4h4};
+        
+        if (out == 16b1110100111010111 && sc.inc_state == 1) {
+          state.d = state.PASS;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;}
+            
+      state.FAIL:
+      // This prints NAYB to indicate boolean
+        seg.values = {4hf, 4he, 4hd, 4h8}; 
+        
+      state.PASS:
+      // This prints YAYB to indicate boolean
+        seg.values = {4hd, 4he, 4hd, 4h8};
+      
+}
+}
+}

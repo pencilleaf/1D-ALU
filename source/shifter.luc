@@ -1,0 +1,18 @@
+module shifter (
+    input a[16],
+    input b[16],
+    input alufn[6],
+    output out[16]
+  ) {
+  sig shift[4];
+    
+  always {
+    out = 0;
+    shift =  b[3:0]; //number of bits to shift
+    case(alufn){
+    6h20: out = a << shift; //shift left
+    6h21: out = a >> shift; //shift right
+    6h23: out = $signed(a) >>> shift; //shift right with sign extension
+    }
+  }
+}

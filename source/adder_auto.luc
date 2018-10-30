@@ -1,0 +1,335 @@
+module adder_auto (
+    input clk,  // clock
+    input rst,  // reset
+    input trigger, // this will start the relevant states of the test
+    output io_sel [4],  // Digit select on IO Shield
+    output io_seg [8],  // 7-segment LEDs on IO Shield
+    output a[16],  // The tester will output 16 bits of a  
+    output b[16],  // The tester will output 16 bits of b
+    output alufn[6],  // The tester will output 6 bits of alufn
+    input out[16]  // the tester will take in the ouput of the alu_error and check its validity 
+  ) {
+  
+  .clk(clk) {   
+  
+    .rst(rst) {
+      // Define a finite state machine with 19 states 
+      // One idle state, 16 test cases, a fail and a success state
+      fsm state = {IDLE, TEST1, TEST2, TEST3, TEST4, TEST5, TEST6, TEST7, TEST8, 
+      TEST9, TEST10, TEST11, TEST12, TEST13, TEST14, TEST15, TEST16, FAIL, SUCCESS};
+      multi_seven_seg seg;
+      stateCounter sc;
+    }
+  }
+  
+
+  always {
+    a = 0;
+    b = 0;
+    alufn = 6b0;
+        
+    
+    // The segments will display "EYYY" by default
+    seg.values = {4hb, 4hd, 4hd, 4hd};
+    
+    io_seg = ~seg.seg; // Connect segments to the driver
+    io_sel = ~seg.sel; // Connect digit select to the driver
+    
+    // Set the initial state 
+    if(trigger == 0){
+        state.d = state.IDLE; // Set the initial state to idle because mojo_top initialises trigger to 0
+        }
+    
+    // We use case statements to define the response for different states in the stae machine
+    case (state.q) {
+            
+      state.IDLE:
+        seg.values = {4hf, 4hb, 4hc, 4h0};    
+        if(trigger == 1) {
+          state.d = state.TEST1;
+        }
+      
+      // TEST 1 positive + positive
+      state.TEST1:
+        a = 16b0000000000111010;
+        b = 16b0000100101010110;
+        alufn = 6b0;
+        seg.values = {4ha, 4ha, 4ha, 4h1};  // 1
+        // Check if the outputs is expected
+        //If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b0000100110010000 && sc.inc_state == 1) {
+          state.d = state.TEST2;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+      // TEST2 positive + 0
+      state.TEST2:
+        a = 16b0001110101101110;
+        b = 16b0000000000000000;
+        alufn = 6b0;
+        seg.values = {4ha, 4ha, 4ha, 4h2};  // 2
+        // Check if the outputs is expected
+        //If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b0001110101101110 && sc.inc_state == 1) {
+          state.d = state.TEST3;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+        // TEST 3 positive + negative (|a|>|b|, give positive)
+      state.TEST3:
+        a = 16b0000100100100110;
+        b = 16b1111111001011011;
+        alufn = 6b0;
+        seg.values = {4ha, 4ha, 4ha, 4h3};  // 3
+        // Check if the outputs is expected
+        //If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b0000011110000001 && sc.inc_state == 1) {
+          state.d = state.TEST4;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+        // TEST 4 positive + negative (|a|=|b|, give 0)
+      state.TEST4:
+        a = 16b0010001011100100;
+        b = 16b1101110100011100;
+        alufn = 6b0;
+        seg.values = {4ha, 4ha, 4ha, 4h4};  // 4
+        // Check if the outputs is expected
+        //If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b0000000000000000 && sc.inc_state == 1) {
+          state.d = state.TEST5;
+        }
+
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+        // TEST 5 positive + negative (|a|<|b|, give negative)
+      state.TEST5:
+        a = 16b0000000111110100;
+        b = 16b1111110101010101;
+        alufn = 6b0;
+        seg.values = {4ha, 4ha, 4ha, 4h5};  // 5
+        // Check if the outputs is expected
+        //If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b1111111101001001 && sc.inc_state == 1) {
+          state.d = state.TEST6;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+        // TEST 6 positive + positive (small overflow)
+      state.TEST6:
+        a = 16b0111111111111111;
+        b = 16b0000000000000001;
+        alufn = 6b0;
+        seg.values = {4ha, 4ha, 4ha, 4h6};  // 6
+        // Check if the outputs is expected
+        //If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b1000000000000000 && sc.inc_state == 1) {
+          state.d = state.TEST7;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+        // TEST 7 positive + positive (large overflow)
+      state.TEST7:
+        a = 16b0111111111111111;
+        b = 16b0111111111111111;
+        alufn = 6b0;
+        seg.values = {4ha, 4ha, 4ha, 4h7};  // 7
+        // Check if the outputs is expected
+        //If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b1111111111111110 && sc.inc_state == 1) {
+          state.d = state.TEST8;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+        // TEST 8 zero + zero
+      state.TEST8:
+        a = 16b0000000000000000;
+        b = 16b0000000000000000;
+        alufn = 6b0;
+        seg.values = {4ha, 4ha, 4ha, 4h8};  // 8
+        // Check if the outputs is expected
+        //If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b0000000000000000 && sc.inc_state == 1) {
+          state.d = state.TEST9;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+        // TEST 9 negative - negative (b>a, give negative)
+      state.TEST9:
+        a = 16b1100111100101100;
+        b = 16b1111111110100001;
+        alufn = 6b1;
+        seg.values = {4ha, 4ha, 4ha, 4h9};  // 9
+        // Check if the outputs is expected
+        //If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b1100111110001011 && sc.inc_state == 1) {
+          state.d = state.TEST10;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+        // TEST 10 negative - 0
+      state.TEST10:
+        a = 16b1110111101110001;
+        b = 16b0000000000000000;
+        alufn = 6b1;
+        seg.values = {4ha, 4ha, 4h1, 4h0};  // 10
+        // Check if the outputs is expected
+        //If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b1110111101110001 && sc.inc_state == 1) {
+          state.d = state.TEST11;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+        // TEST 11 negative - positive
+      state.TEST11:
+        a = 16b1110011001111010;
+        b = 16b0010011010010001;
+        alufn = 6b1;
+        seg.values = {4ha, 4ha, 4h1, 4h1};  // 11
+        // Check if the outputs is expected
+        //If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b1011111111101001 && sc.inc_state == 1) {
+          state.d = state.TEST12;
+        }
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+        // TEST 12 negative - negative (|a|=|b|, give 0)
+      state.TEST12:
+        a = 16b1110100111010111;
+        b = 16b1110100111010111;
+        alufn = 6b1;
+        seg.values = {4ha, 4ha, 4h1, 4h2};  // 12
+        // Check if the outputs is expected
+        //If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b0000000000000000 && sc.inc_state == 1) {
+          state.d = state.TEST13;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+        // TEST 13 negative - negative (|a|<|b|, give positive)
+      state.TEST13:
+        a = 16b1110000101100110;
+        b = 16b1101101000000101;
+        alufn = 6b1;
+        seg.values = {4ha, 4ha, 4h1, 4h3};  // 13
+        // Check if the outputs is expected
+        //If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b0000011101100001 && sc.inc_state == 1) {
+          state.d = state.TEST14;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+        // TEST 14 negative - positive (small overflow)
+      state.TEST14:
+        a = 16b1000000000000000;
+        b = 16b0000000000000001;
+        alufn = 6b1;
+        seg.values = {4ha, 4ha, 4h1, 4h4};  // 14
+        // Check if the outputs is expected
+        //If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b0111111111111111 && sc.inc_state == 1) {
+          state.d = state.TEST15;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+        // TEST 15 negative - positive (large overflow)
+      state.TEST15:
+        a = 16b1000000000000000;
+        b = 16b0111111111111111;
+        alufn = 6b1;
+        seg.values = {4ha, 4ha, 4h1, 4h5};  // 1
+        // Check if the outputs is expected
+        //If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b0000000000000001 && sc.inc_state == 1) {
+          state.d = state.TEST16;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+        // TEST 16 zero - zero
+      state.TEST16:
+        a = 16b0000000000000000;
+        b = 16b0000000000000000;
+        alufn = 6b1;
+        seg.values = {4ha, 4ha, 4h1, 4h6};  // 1
+        // Check if the outputs is expected
+        // If it is correct go to the next test case(nest state), if not, go to fail state
+        
+        if (out == 16b0000000000000000 && sc.inc_state == 1) {
+          state.d = state.SUCCESS;
+        }
+
+        else if (sc.inc_state == 1) {
+          state.d = state.FAIL;
+        }
+        
+        state.SUCCESS:
+          // This prints NAYA to indicate adder
+          seg.values = {4hd,4he,4hd,4he};
+        
+        state.FAIL:
+          // This prints YAYA to indicate adder
+          seg.values = {4hf,4he,4hd,4he};
+       
+        }
+
+  }
+}

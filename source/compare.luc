@@ -1,0 +1,17 @@
+module compare (
+    input a[16],
+    input b[16],
+    input alufn[6],
+    output out[16]
+  ) {
+
+  always {
+    out = 0;
+    
+    case(alufn){
+    6h33: if(a == b){out[0] = 1;} //Compare equal
+    6h35: if($signed(a) < $signed(b)){out[0] = 1;}  //Compare less than
+    6h37: if($signed(a) <= $signed(b)){out[0] = 1;} //Compare less than or equal to
+  }
+  }
+}
